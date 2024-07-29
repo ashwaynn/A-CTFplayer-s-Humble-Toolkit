@@ -6,8 +6,13 @@
 # -> extract packet's contents from FILE
 # -> construct NEW packet
 # -> Send the packet
+# Phase 1 - Completed
+
+# Phase 2 : Replacement target(s) Detector and Replacer
+
 
 import argparse
+import requests
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Rapidly fires customized HTTP requests at the pointed target!")
@@ -25,42 +30,44 @@ def print_verbose_output(args):
         # if args.output:
         #     print(f"Output file: {args.output}")
 
-def read_file(path):
+    
+
+def extract_packet_sections(path):
     try:
-        with open(path, 'r') as file:
-            content = file.read()
-        return content
+        with open(path, 'rb') as file:
+            
+            # Request line extraction
+            
+            btext = file.readline()
+            if btext.endswith(b'\r\n'):
+                btext = btext[:-2]
+            packet_req_line = btext.decode('utf-8')
+ 
+            # Headers extraction
+            
+            packet_headers = []
+            
+            while True:
+                btext = file.readline()
+                if btext != b'\r\n':
+                    if btext.endswith(b'\r\n'):
+                        btext = btext[:-2]
+                    packet_headers.append(btext.decode('utf-8'))
+                else:
+                    break
+
+            # Body extraction
+
+            packet_body = file.read()
+            return packet_req_line, packet_headers, packet_body
+
     except FileNotFoundError:
         print(f"Error: The file '{path}' was not found.")
-        return None
+        exit(1)
     except Exception as e:
         print(f"Error: {e}")
-        return None
-
-def extract_packet_sections(file_content):
-    lines = file_content.splitlines()
+        exit(1)
     
-    # Request line extraction
-    packet_req_line = lines[0]
-    
-    # Headers extraction
-    packet_headers = []
-    empty_line_index = 0
-    for i in range(1, len(lines)):
-        if lines[i].strip() != '':
-            packet_headers.append(lines[i])
-        else:
-            empty_line_index = i
-            break
-
-    # Body extraction
-    if empty_line_index + 1 < len(lines):
-        # HTTP request has a body
-        packet_body = lines[empty_line_index+1:len(lines)]
-    else:
-        packet_body = None
-
-    return packet_req_line, packet_headers, packet_body
 
 def print_packet_sections(request_line, headers, body):
     print("Req Line : ", request_line)
@@ -88,20 +95,61 @@ def parse_headers(headers):
         header_obj[head_val[0]] = head_val[1]
     return header_obj
 
+
+def build_and_send_packet(req_line, headers, req_body):
+    URL = "http://" + headers["Host"] + req_line["target"]
+    del headers["Host"]
+    if req_line["method"] == "GET":
+        response = requests.get(URL, headers=headers)
+        print("Response Status Code : ", response.status_code)
+    
+    elif req_line["method"] == "POST":
+        response = requests.post(URL, headers=headers, data=req_body)
+        print("Response Status Code : ", response.status_code)
+    else:
+        print("The tool only supports GET/POST requests, as of now.")
+        exit(0)
+
+
+
 def main():
+    
+    # Argument parsing and dealing with verbose O/p
+
     args = parse_arguments()
     print_verbose_output(args)
-    file_content = read_file(args.request)
-    packet_req_line, packet_headers, packet_body = extract_packet_sections(file_content)
+    
+
+    # Extraction of the packet's sections
+
+    packet_req_line, packet_headers, packet_body = extract_packet_sections(args.request)
     #print_packet_sections(packet_req_line, packet_headers, packet_body)
+    #print(packet_body)
+
+    # Parsing of the packet's sections
+    
     req_line_obj = parse_request_line(packet_req_line)
     print(req_line_obj)
     header_obj = parse_headers(packet_headers)
     #print(header_obj)
+    
     i = 1
     for k, v in header_obj.items():
         print(f"{i}. {k}::: {v}")
         i += 1
+    
+    #print(len(packet_body))
+    #print(packet_body)
+    print(len(packet_body))
+    req_body = packet_body if packet_body else None
+    #print(req_body)
+    #print(len(req_body))
+    #print_packet_sections(req_line_obj, header_obj, req_body)
+    
+    
+    # Building and Sending the packet
+    
+    build_and_send_packet(req_line_obj, header_obj, req_body)
 
 
 if __name__ == "__main__":
