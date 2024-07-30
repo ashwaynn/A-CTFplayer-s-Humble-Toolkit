@@ -3,12 +3,20 @@
 # --------------------
 
 # Phase 1 : Packet Constructor and Forwarder
-# -> extract packet's contents from FILE
-# -> construct NEW packet
+# -> Extract packet's contents from FILE
+# -> Construct NEW packet
 # -> Send the packet
 # Phase 1 - Completed
 
 # Phase 2 : Replacement target(s) Detector and Replacer
+# -> Accept a single wordlist or a pathlist
+# -> A pathlist is a basically a file containing the paths of multiple wordlists.
+# -> Determine the number of replacement targets based on the provided wordlist or pathlist.
+# -> If a wordlist has been provided then only one target would be present.
+# -> If a pathlist has been provided then multiple targets would be present (Must have a target counter in the code). 
+# -> Detect the replacement target during the parsing stage.
+# -> In case of a POST request, update the Content-Length header after the replacement(s)
+
 
 
 import argparse
