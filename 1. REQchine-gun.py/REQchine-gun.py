@@ -14,20 +14,57 @@
 # -> Determine the number of replacement targets based on the provided wordlist or pathlist.
 # -> If a wordlist has been provided then only one target would be present.
 # -> If a pathlist has been provided then multiple targets would be present (Must have a target counter in the code). 
-# -> Detect the replacement target during the parsing stage.
+# -> Detect the replacement targets after the parsing stage.
 # -> In case of a POST request, update the Content-Length header after the replacement(s)
-
+# Format for paceholder: ^REQchine^
 
 
 import argparse
 import requests
 
+PLACEHOLDER_TEXT = "^REQchine^"
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Rapidly fires customized HTTP requests at the pointed target!")
     parser.add_argument('-r', '--request', type=str, required=True, help='File containing the HTTP request packet')
+    parser.add_argument('-w', '--wordlist', type=str, help='A Wordlist containing the words to be used as replacements in the HTTP requests')
+    parser.add_argument('-p', '--pathlist', type=str, help='A Pathlist containing the paths of various wordlists to be used. The first wordlist would be used for the first target, the second wordlist for the second target and so on.')
     parser.add_argument('-v', '--verbose', action='store_true', help='For Verbose Output')
+    
 
-    return parser.parse_args()
+    return parser
+
+def check_arguments(args, parser):
+
+    if args.wordlist is None and args.pathlist is None:
+        parser.error("No wordlist or pathlist provided. You must supply a --wordlist or a --pathlist for the tool to work correctly.")
+    
+    if args.wordlist and args.pathlist:
+        parser.error("Both --wordlist and --pathlist have been provided. You must supply only one of the two arguments for the tool to work correctly.")
+
+
+def get_replacements_count_and_filepaths(args):
+    
+    replacements_filepaths = []
+
+    if args.wordlist:
+        replacements_count = 1
+        replacements_filepaths.append(args.wordlist)
+    else:
+        try:
+            with open(args.pathlist, 'r') as file:
+                file_content = file.read()
+                replacements_filepaths = file_content.splitlines()
+                replacements_count = len(replacements_filepaths)
+        except FileNotFoundError:
+            print(f"Error: The file '{args.pathlist}' was not found.")
+            exit(1)
+        except Exception as e:
+            print(f"Error: {e}")
+            exit(1)
+    
+    return replacements_count, replacements_filepaths
+
 
 def print_verbose_output(args):
     #print(args.verbose)
@@ -118,13 +155,81 @@ def build_and_send_packet(req_line, headers, req_body):
         print("The tool only supports GET/POST requests, as of now.")
         exit(0)
 
+def make_replacements_and_fire_the_gun(req_filepath, r_count, r_filepaths, req_line_obj, header_obj, req_body):
+    if r_count == 1:
+        #---------------------------
+        # Find the replacement target in the packet
+        # Open the wordlist and call build_and_send_packet() for every word in the wordlist and obtain the response object.
+        # Populate the keys stats of the returned response object
+        # Have a mechanism to pause or end the requests firing
+        #---------------------------
+
+        # Check for the PLACEHOLDER_TEXT in req_line_obj
+
+        if PLACEHOLDER_TEXT in req_line_obj["target"]:
+            try:
+                with open(r_filepaths[0]) as wordlist_file:
+                    print(req_line_obj)
+                    original_target = req_line_obj["target"]
+                    print("------------")
+                    for word in wordlist_file:
+                        replacement = word.strip()
+                        req_line_obj["target"] = req_line_obj["target"].replace(PLACEHOLDER_TEXT, replacement)
+                        print(req_line_obj)
+                        req_line_obj["target"] = original_target
+
+            except FileNotFoundError:
+                print(f"Error: The file '{r_filepaths[0]}' was not found.")
+                exit(1)
+            except Exception as e:
+                print(f"Error: {e}")
+                exit(1)
+            
+            return
+
+        # Check for the PLACEHOLDER_TEXT in header_obj
+
+        for header, value in header_obj.items():
+            if PLACEHOLDER_TEXT in value:
+                try:
+                    with open(r_filepaths[0]) as wordlist_file:
+                        print(f"{header} : {value}")
+                        print("------------")
+                        for word in wordlist_file:
+                            replacement = word.strip()
+                            header_obj[header] = header_obj[header].replace(PLACEHOLDER_TEXT, replacement)
+                            print(f"{header} : {header_obj[header]}")
+                            header_obj[header] = value
+
+                except FileNotFoundError:
+                    print(f"Error: The file '{r_filepaths[0]}' was not found.")
+                    exit(1)
+                except Exception as e:
+                    print(f"Error: {e}")
+                    exit(1)
+                
+                return
+
+        # Check for the PLACEHOLDER_TEXT in req_body
+
+        if req_line_obj["method"] != "POST":
+            print(f"Error: No replacement target (^REQchine^) was found in the provided request file '{req_filepath}'. Check your file!")
+            exit(1)
+        else:
+            print("In development")
+
 
 
 def main():
     
     # Argument parsing and dealing with verbose O/p
 
-    args = parse_arguments()
+    parser = parse_arguments()
+    args = parser.parse_args()
+    check_arguments(args, parser)
+    replacements_count, replacements_filepaths = get_replacements_count_and_filepaths(args)
+    print(replacements_count)
+    print(replacements_filepaths)
     print_verbose_output(args)
     
 
@@ -154,10 +259,15 @@ def main():
     #print(len(req_body))
     #print_packet_sections(req_line_obj, header_obj, req_body)
     
+
+    # The core functionality
+
+    make_replacements_and_fire_the_gun(args.request, replacements_count, replacements_filepaths, req_line_obj, header_obj, req_body)
     
+    #exit(0)
     # Building and Sending the packet
     
-    build_and_send_packet(req_line_obj, header_obj, req_body)
+    #build_and_send_packet(req_line_obj, header_obj, req_body)
 
 
 if __name__ == "__main__":
