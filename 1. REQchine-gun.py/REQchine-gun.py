@@ -23,6 +23,7 @@ import argparse
 import requests
 
 PLACEHOLDER_TEXT = "^REQchine^"
+PLACEHOLDER_TEXT_BINARY = b"^REQchine^"
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Rapidly fires customized HTTP requests at the pointed target!")
@@ -174,7 +175,7 @@ def make_replacements_and_fire_the_gun(req_filepath, r_count, r_filepaths, req_l
                     print("------------")
                     for word in wordlist_file:
                         replacement = word.strip()
-                        req_line_obj["target"] = req_line_obj["target"].replace(PLACEHOLDER_TEXT, replacement)
+                        req_line_obj["target"] = req_line_obj["target"].replace(PLACEHOLDER_TEXT, replacement, 1)
                         print(req_line_obj)
                         req_line_obj["target"] = original_target
 
@@ -197,7 +198,7 @@ def make_replacements_and_fire_the_gun(req_filepath, r_count, r_filepaths, req_l
                         print("------------")
                         for word in wordlist_file:
                             replacement = word.strip()
-                            header_obj[header] = header_obj[header].replace(PLACEHOLDER_TEXT, replacement)
+                            header_obj[header] = header_obj[header].replace(PLACEHOLDER_TEXT, replacement, 1)
                             print(f"{header} : {header_obj[header]}")
                             header_obj[header] = value
 
@@ -216,8 +217,31 @@ def make_replacements_and_fire_the_gun(req_filepath, r_count, r_filepaths, req_l
             print(f"Error: No replacement target (^REQchine^) was found in the provided request file '{req_filepath}'. Check your file!")
             exit(1)
         else:
-            print("In development")
+            if PLACEHOLDER_TEXT_BINARY in req_body:
+                try:
+                    with open(r_filepaths[0]) as wordlist_file:
+                        print(f"Req body's length BEFORE update : {len(req_body)}")
+                        print(f"Content-Length : {header_obj["Content-Length"]}")                    
+                        print("------------")
+                        for word in wordlist_file:
+                            replacement = word.strip().encode()
+                            modified_req_body = req_body.replace(PLACEHOLDER_TEXT_BINARY, replacement, 1)
+                            header_obj["Content-Length"] = len(modified_req_body)
+                            if len(req_body) < 150:
+                                print(modified_req_body)
+                            print(f"Req body's length AFTER update : {len(modified_req_body)}")
+                            print(f"Content-Length : {header_obj["Content-Length"]}")
+                            
 
+                except FileNotFoundError:
+                    print(f"Error: The file '{r_filepaths[0]}' was not found.")
+                    exit(1)
+                except Exception as e:
+                    print(f"Error: {e}")
+                    exit(1)
+            else:
+                print(f"Error: No replacement target (^REQchine^) was found in the provided request file '{req_filepath}'. Check your file!")
+                exit(1)
 
 
 def main():
@@ -246,15 +270,17 @@ def main():
     header_obj = parse_headers(packet_headers)
     #print(header_obj)
     
-    i = 1
-    for k, v in header_obj.items():
-        print(f"{i}. {k}::: {v}")
-        i += 1
+    # i = 1
+    # for k, v in header_obj.items():
+    #     print(f"{i}. {k}::: {v}")
+    #     i += 1
     
     #print(len(packet_body))
     #print(packet_body)
-    print(len(packet_body))
+    #print(len(packet_body))
+    
     req_body = packet_body if packet_body else None
+    
     #print(req_body)
     #print(len(req_body))
     #print_packet_sections(req_line_obj, header_obj, req_body)
