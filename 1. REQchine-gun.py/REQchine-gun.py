@@ -17,6 +17,11 @@
 # -> Detect the replacement targets after the parsing stage.
 # -> In case of a POST request, update the Content-Length header after the replacement(s)
 # Format for paceholder: ^REQchine^
+# Phase 2 (Single replacement target) - Completed
+
+#Phase 3: Forwarder for the updated requests and Response Collector
+# -> Forward the packets to the target after the needed replacements have been performed.
+# -> Collect the responses received from the target.
 
 
 import argparse
