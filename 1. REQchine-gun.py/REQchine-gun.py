@@ -151,15 +151,79 @@ def build_and_send_packet(req_line, headers, req_body):
     URL = "http://" + headers["Host"] + req_line["target"]
     del headers["Host"]
     if req_line["method"] == "GET":
-        response = requests.get(URL, headers=headers)
-        print("Response Status Code : ", response.status_code)
+        return requests.get(URL, headers=headers)
+        #print("Response Status Code : ", response.status_code)
     
     elif req_line["method"] == "POST":
-        response = requests.post(URL, headers=headers, data=req_body)
-        print("Response Status Code : ", response.status_code)
+        return requests.post(URL, headers=headers, data=req_body)
+        #print("Response Status Code : ", response.status_code)
     else:
         print("The tool only supports GET/POST requests, as of now.")
         exit(0)
+
+
+def handle_single_replacement_in_req_line(req_line_obj, wl_file):
+    try:
+        with open(wl_file) as wordlist_file:
+            print(req_line_obj)
+            original_target = req_line_obj["target"]
+            print("------------")
+            for word in wordlist_file:
+                replacement = word.strip()
+                req_line_obj["target"] = req_line_obj["target"].replace(PLACEHOLDER_TEXT, replacement, 1)
+                print(req_line_obj)
+                req_line_obj["target"] = original_target
+
+    except FileNotFoundError:
+        print(f"Error: The file '{wl_file}' was not found.")
+        exit(1)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+
+
+def handle_single_replacement_in_header(header_obj, header, value, wl_file):
+    try:
+        with open(wl_file) as wordlist_file:
+            print(f"{header} : {value}")
+            print("------------")
+            for word in wordlist_file:
+                replacement = word.strip()
+                header_obj[header] = header_obj[header].replace(PLACEHOLDER_TEXT, replacement, 1)
+                print(f"{header} : {header_obj[header]}")
+                header_obj[header] = value
+
+    except FileNotFoundError:
+        print(f"Error: The file '{wl_file}' was not found.")
+        exit(1)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+
+
+def handle_single_replacement_in_req_body(req_body, header_obj, wl_file):
+    try:
+        with open(wl_file) as wordlist_file:
+            print(f"Req body's length BEFORE update : {len(req_body)}")
+            print(f"Content-Length : {header_obj["Content-Length"]}")                    
+            print("------------")
+            for word in wordlist_file:
+                replacement = word.strip().encode()
+                modified_req_body = req_body.replace(PLACEHOLDER_TEXT_BINARY, replacement, 1)
+                header_obj["Content-Length"] = len(modified_req_body)
+                if len(req_body) < 150:
+                    print(modified_req_body)
+                print(f"Req body's length AFTER update : {len(modified_req_body)}")
+                print(f"Content-Length : {header_obj["Content-Length"]}")
+                
+
+    except FileNotFoundError:
+        print(f"Error: The file '{wl_file}' was not found.")
+        exit(1)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+
 
 def make_replacements_and_fire_the_gun(req_filepath, r_count, r_filepaths, req_line_obj, header_obj, req_body):
     if r_count == 1:
@@ -173,46 +237,14 @@ def make_replacements_and_fire_the_gun(req_filepath, r_count, r_filepaths, req_l
         # Check for the PLACEHOLDER_TEXT in req_line_obj
 
         if PLACEHOLDER_TEXT in req_line_obj["target"]:
-            try:
-                with open(r_filepaths[0]) as wordlist_file:
-                    print(req_line_obj)
-                    original_target = req_line_obj["target"]
-                    print("------------")
-                    for word in wordlist_file:
-                        replacement = word.strip()
-                        req_line_obj["target"] = req_line_obj["target"].replace(PLACEHOLDER_TEXT, replacement, 1)
-                        print(req_line_obj)
-                        req_line_obj["target"] = original_target
-
-            except FileNotFoundError:
-                print(f"Error: The file '{r_filepaths[0]}' was not found.")
-                exit(1)
-            except Exception as e:
-                print(f"Error: {e}")
-                exit(1)
-            
+            handle_single_replacement_in_req_line(req_line_obj, r_filepaths[0])
             return
 
         # Check for the PLACEHOLDER_TEXT in header_obj
 
         for header, value in header_obj.items():
             if PLACEHOLDER_TEXT in value:
-                try:
-                    with open(r_filepaths[0]) as wordlist_file:
-                        print(f"{header} : {value}")
-                        print("------------")
-                        for word in wordlist_file:
-                            replacement = word.strip()
-                            header_obj[header] = header_obj[header].replace(PLACEHOLDER_TEXT, replacement, 1)
-                            print(f"{header} : {header_obj[header]}")
-                            header_obj[header] = value
-
-                except FileNotFoundError:
-                    print(f"Error: The file '{r_filepaths[0]}' was not found.")
-                    exit(1)
-                except Exception as e:
-                    print(f"Error: {e}")
-                    exit(1)
+                handle_single_replacement_in_header(header_obj, header, value, r_filepaths[0])
                 
                 return
 
@@ -223,27 +255,8 @@ def make_replacements_and_fire_the_gun(req_filepath, r_count, r_filepaths, req_l
             exit(1)
         else:
             if PLACEHOLDER_TEXT_BINARY in req_body:
-                try:
-                    with open(r_filepaths[0]) as wordlist_file:
-                        print(f"Req body's length BEFORE update : {len(req_body)}")
-                        print(f"Content-Length : {header_obj["Content-Length"]}")                    
-                        print("------------")
-                        for word in wordlist_file:
-                            replacement = word.strip().encode()
-                            modified_req_body = req_body.replace(PLACEHOLDER_TEXT_BINARY, replacement, 1)
-                            header_obj["Content-Length"] = len(modified_req_body)
-                            if len(req_body) < 150:
-                                print(modified_req_body)
-                            print(f"Req body's length AFTER update : {len(modified_req_body)}")
-                            print(f"Content-Length : {header_obj["Content-Length"]}")
-                            
+                handle_single_replacement_in_req_body(req_body, header_obj, r_filepaths[0])
 
-                except FileNotFoundError:
-                    print(f"Error: The file '{r_filepaths[0]}' was not found.")
-                    exit(1)
-                except Exception as e:
-                    print(f"Error: {e}")
-                    exit(1)
             else:
                 print(f"Error: No replacement target (^REQchine^) was found in the provided request file '{req_filepath}'. Check your file!")
                 exit(1)
