@@ -27,10 +27,15 @@
 import argparse
 import copy
 import requests
+import sys
+import threading
+import time
 
+
+HALT_EVENT = threading.Event()
 PLACEHOLDER_TEXT = "^REQchine^"
 PLACEHOLDER_TEXT_BINARY = b"^REQchine^"
-RESPONSE_LIST = []
+RESPONSE_LIST = {}
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Rapidly fires customized HTTP requests at the pointed target!")
@@ -148,13 +153,52 @@ def parse_headers(headers):
         header_obj[head_val[0]] = head_val[1]
     return header_obj
 
+def calculate_res_length(response):
+    status_line_length = 12 + len(str(response.status_code)) + len(response.reason)
+    headers_length = sum(len(k) + len(v) + 4 for k, v in response.headers.items())
+    body_length = len(response.content)
+
+    return status_line_length + headers_length + 2 + body_length
+
+def collect_response_and_print(response, payloads):
+    res_list_length = len(RESPONSE_LIST)
+    if res_list_length == 0:
+        print(f"REQ No.\t\tPayload(s)\t\tStatus\t\tRES Length")
+    RESPONSE_LIST[res_list_length+1] = [response, payloads]
+
+    print(f"{res_list_length+1}\t\t{', '.join(payloads)}\t\t\t{response.status_code}\t\t{calculate_res_length(response)}")
+
+
+def print_response_key_stats():
+    print("Working on it")
+
+def halt_req_firing():
+    print("From halt_req_firing: Currently Halted")
+    time.sleep(5)
+
+def look_for_firing_halt_signal():
+    while not HALT_EVENT.is_set():
+        sys.stdin.read(1)
+        #print("From Thread: Halting Fire!!!!")
+        HALT_EVENT.set()
+
+
+def set_firing_halt_monitoring_thread():
+    halt_monitor_thread = threading.Thread(target=look_for_firing_halt_signal)
+    halt_monitor_thread.daemon = True
+    halt_monitor_thread.start()
 
 def build_and_send_packet(req_line, headers, req_body):
-    print("Reached here")
+    if HALT_EVENT.is_set():
+        #print("Inside build_and_send HALT_EVENT if block")
+        halt_req_firing()
+        HALT_EVENT.clear()
+        set_firing_halt_monitoring_thread()
+        print("Resuming build_and_send")
     URL = "http://" + headers["Host"] + req_line["target"]
-    print("Reached here too")
     host_header_val = headers["Host"]
     del headers["Host"]
+    time.sleep(0.5)
     if req_line["method"] == "GET":
         response = requests.get(URL, headers=headers)
         headers["Host"] = host_header_val
@@ -174,21 +218,21 @@ def build_and_send_packet(req_line, headers, req_body):
 def handle_single_replacement_in_req_line(req_line_obj, headers, req_body, wl_file):
     try:
         with open(wl_file) as wordlist_file:
-            print(req_line_obj)
+            #print(req_line_obj)
             original_target = req_line_obj["target"]
-            print("------------")
-            
+            #print("------------")
+            set_firing_halt_monitoring_thread()
             for word in wordlist_file:
                 replacement = word.strip()
                 req_line_obj["target"] = req_line_obj["target"].replace(PLACEHOLDER_TEXT, replacement, 1)
-                print(req_line_obj)
+                #print(req_line_obj)
                 
-                RESPONSE_LIST.append(build_and_send_packet(req_line_obj, headers, req_body))
+                collect_response_and_print(build_and_send_packet(req_line_obj, headers, req_body), [replacement])
                 
                 req_line_obj["target"] = original_target
             
-            print(RESPONSE_LIST)
-            print(len(RESPONSE_LIST))
+            # print(RESPONSE_LIST)
+            # print(len(RESPONSE_LIST))
 
     except FileNotFoundError:
         print(f"Error: The file '{wl_file}' was not found.")
@@ -201,17 +245,18 @@ def handle_single_replacement_in_req_line(req_line_obj, headers, req_body, wl_fi
 def handle_single_replacement_in_header(req_line_obj, header_obj, req_body, header, value, wl_file):
     try:
         with open(wl_file) as wordlist_file:
-            print(f"{header} : {value}")
-            print("------------")
+            # print(f"{header} : {value}")
+            # print("------------")
+            set_firing_halt_monitoring_thread()
             for word in wordlist_file:
                 replacement = word.strip()
                 header_obj[header] = header_obj[header].replace(PLACEHOLDER_TEXT, replacement, 1)
-                print(f"{header} : {header_obj[header]}")
-                RESPONSE_LIST.append(build_and_send_packet(req_line_obj, header_obj, req_body))
+                #print(f"{header} : {header_obj[header]}")
+                collect_response_and_print(build_and_send_packet(req_line_obj, header_obj, req_body), [replacement])
                 header_obj[header] = value
             
-            print(RESPONSE_LIST)
-            print(len(RESPONSE_LIST))
+            # print(RESPONSE_LIST)
+            # print(len(RESPONSE_LIST))
 
     except FileNotFoundError:
         print(f"Error: The file '{wl_file}' was not found.")
@@ -224,21 +269,22 @@ def handle_single_replacement_in_header(req_line_obj, header_obj, req_body, head
 def handle_single_replacement_in_req_body(req_line_obj, header_obj, req_body, wl_file):
     try:
         with open(wl_file) as wordlist_file:
-            print(f"Req body's length BEFORE update : {len(req_body)}")
-            print(f"Content-Length : {header_obj["Content-Length"]}")                    
-            print("------------")
+            #print(f"Req body's length BEFORE update : {len(req_body)}")
+            #print(f"Content-Length : {header_obj["Content-Length"]}")                    
+            #print("------------")
+            set_firing_halt_monitoring_thread()
             for word in wordlist_file:
                 replacement = word.strip().encode()
                 modified_req_body = req_body.replace(PLACEHOLDER_TEXT_BINARY, replacement, 1)
                 header_obj["Content-Length"] = str(len(modified_req_body))
-                if len(modified_req_body) < 150:
-                    print(modified_req_body)
-                print(f"Req body's length AFTER update : {len(modified_req_body)}")
-                print(f"Content-Length : {header_obj["Content-Length"]}")
-                RESPONSE_LIST.append(build_and_send_packet(req_line_obj, header_obj, modified_req_body))
+                # if len(modified_req_body) < 150:
+                #     print(modified_req_body)
+                # print(f"Req body's length AFTER update : {len(modified_req_body)}")
+                # print(f"Content-Length : {header_obj["Content-Length"]}")
+                collect_response_and_print(build_and_send_packet(req_line_obj, header_obj, modified_req_body), [replacement.decode('utf-8')])
             
-            print(RESPONSE_LIST)
-            print(len(RESPONSE_LIST))
+            # print(RESPONSE_LIST)
+            # print(len(RESPONSE_LIST))
 
     except FileNotFoundError:
         print(f"Error: The file '{wl_file}' was not found.")
