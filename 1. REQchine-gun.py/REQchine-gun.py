@@ -70,10 +70,10 @@ def get_replacements_count_and_filepaths(args):
                 replacements_filepaths = file_content.splitlines()
                 replacements_count = len(replacements_filepaths)
         except FileNotFoundError:
-            print(f"Error: The file '{args.pathlist}' was not found.")
+            print(f"[ERROR] : The file '{args.pathlist}' was not found.")
             exit(1)
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"[ERROR] : {e}")
             exit(1)
     
     return replacements_count, replacements_filepaths
@@ -95,16 +95,13 @@ def extract_packet_sections(path):
         with open(path, 'rb') as file:
             
             # Request line extraction
-            
             btext = file.readline()
             if btext.endswith(b'\r\n'):
                 btext = btext[:-2]
             packet_req_line = btext.decode('utf-8')
  
             # Headers extraction
-            
             packet_headers = []
-            
             while True:
                 btext = file.readline()
                 if btext != b'\r\n':
@@ -115,15 +112,14 @@ def extract_packet_sections(path):
                     break
 
             # Body extraction
-
             packet_body = file.read()
             return packet_req_line, packet_headers, packet_body
 
     except FileNotFoundError:
-        print(f"Error: The file '{path}' was not found.")
+        print(f"[ERROR] : The file '{path}' was not found.")
         exit(1)
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"[ERROR] : {e}")
         exit(1)
     
 
@@ -164,23 +160,181 @@ def collect_response_and_print(response, payloads):
     res_list_length = len(RESPONSE_LIST)
     if res_list_length == 0:
         print(f"REQ No.\t\tPayload(s)\t\tStatus\t\tRES Length")
-    RESPONSE_LIST[res_list_length+1] = [response, payloads]
+    res_length = calculate_res_length(response)
+    RESPONSE_LIST[res_list_length+1] = (response, payloads, res_length)
+    print(f"{res_list_length+1}\t\t{', '.join(payloads)}\t\t\t{response.status_code}\t\t{res_length}")
 
-    print(f"{res_list_length+1}\t\t{', '.join(payloads)}\t\t\t{response.status_code}\t\t{calculate_res_length(response)}")
+def inspect_response(req_num):
+    print(f"\n--- INSPECTION VIEW FOR REQ NO. {req_num} ---------------")
+    res_tuple = RESPONSE_LIST[req_num]
+    print(f"\nPAYLOAD(S)\t: {", ".join(res_tuple[1])}")
+    print(f"RES LENGTH\t: {res_tuple[2]}")
+    print(f"STATUS LINE\t: {res_tuple[0].status_code} {res_tuple[0].reason}")
+    time.sleep(0.3)
+    print("\n**** HEADERS ****\n")
+    print("\n".join([f"{k}\t: {v}" for k,v in res_tuple[0].headers.items()]))
+    time.sleep(0.3)
+    print(f"\nThe length of the Response Body is {len(res_tuple[0].content)}")
+    choice = input("Enter 'y' if you want to print the Body : ")
+    if choice == 'y':
+        print("\n**** BODY ****\n")
+        print(res_tuple[0].text)
+        time.sleep(0.7)
+    print(f"\n---END OF INSPECTION VIEW FOR REQ NO. {req_num} ----------\n")
+    time.sleep(1)
+    
+def display_response_stats(called_from):
+    print("\n----- RESPONSE STATS -------------------")
+    time.sleep(0.5)
+    # Number of req fired
+    # Number of res grouped according to status code
+    # Number of res grouped according to res length
+    # Option to inspect a single res based on req no.
+    # Option to inspect a list of res based on a specific status code
+    # Option to inspect a list of res based on a specific res length
+    # Option to get back to Halt menu, if it was called by the Halt menu in the first place. Otherwise an option to exit the tool.
+
+    print(f"REQs Fired\t\t\t   : {len(RESPONSE_LIST)}") 
+    status_code_counts = {}
+    length_counts = {}
+    for req_id, res_tuple in RESPONSE_LIST.items():
+        
+        if res_tuple[0].status_code in status_code_counts:
+            status_code_counts[res_tuple[0].status_code] += 1
+        else:
+            status_code_counts[res_tuple[0].status_code] = 1
+        
+        if res_tuple[2] in length_counts:
+            length_counts[res_tuple[2]] += 1
+        else:
+            length_counts[res_tuple[2]] = 1
+
+    print(f"Status codes of received responses : {"\t".join([ f"{k} ({v} responses)" for k, v in status_code_counts.items()])}")
+    print(f"Lengths of received responses\t   : {"\t".join([ f"{k} ({v} responses)" for k, v in length_counts.items()])}")
+    time.sleep(0.75)
+    while True:
+        print("\nWhat do you want to do next?")
+        print("[1] Inspect a single response\t[2] Inspect responses with a specific status code")
+        if called_from == "ERF":
+            print("[3] Inspect responses with a specific RES length\t[4] Exit the tool")
+        else:
+            print("[3] Inspect responses with a specific RES length\t[4] Go back to the Halt Menu")
+        print("[5] Display the Stats again")
+        selected_option = input("\nSelect an option : ")
+
+        if selected_option == "1":
+            req_num = int(input("Enter the REQ No. of the response to be inspected: "))
+            if req_num in range(1, len(RESPONSE_LIST)+1):
+                inspect_response(req_num)
+                print("\n[INFO] : Back to Response Stats Menu\n")
+            else:
+                print("\n[ERROR] : Entered an Incorrect REQ No.\n")
+                time.sleep(0.75)
+
+        elif selected_option == "2":
+            s_code = int(input("Enter the status code to be used as filter : "))
+            if s_code in status_code_counts:
+                for r_id, r_tuple in RESPONSE_LIST.items():
+                    if r_tuple[0].status_code == s_code:
+                        inspect_response(r_id)
+                print("\n[INFO] : Back to Response Stats Menu\n")
+            else:
+                print(f"\n[ERROR] None of the responses have a status code of {s_code}\n")
+                time.sleep(0.75)
+            
+        elif selected_option == "3":
+            res_len = int(input("Enter the RES Length to be used as filter : "))
+            if res_len in length_counts:
+                for r_id, r_tuple in RESPONSE_LIST.items():
+                    if r_tuple[2] == res_len:
+                        inspect_response(r_id)
+                print("\n[INFO] : Back to Response Stats Menu\n")
+            else:
+                print(f"\n[ERROR] None of the responses have a RES Length of {res_len}\n")
+                time.sleep(0.75)
+        
+        elif selected_option == "4":
+            if called_from == "ERF":
+                confirmation = input("Are you sure you want to exit [y/n] : ")
+                if confirmation == 'y':
+                    print("\n[INFO] : Exiting REQchine-gun.py. Bye!")
+                    time.sleep(0.5)
+                    exit(0)
+                else:
+                    print("\n[INFO] : Exit cancelled.\n")
+                    time.sleep(0.75)
+            else:
+                print("\n[INFO] : Going back to the Halt Menu\n")
+                time.sleep(0.5)
+                return
+        
+        elif selected_option == "5":
+            print("\n----- RESPONSE STATS -------------------")
+            time.sleep(0.5)
+            print(f"REQs Fired : {len(RESPONSE_LIST)}") 
+            print(f"Status codes of received responses: ")
+            print("\t".join([ f"{k} ({v} responses)" for k, v in status_code_counts.items()]))
+            print(f"Lengths of received responses: ")
+            print("\t".join([ f"{k} ({v} responses)" for k, v in length_counts.items()]))
+            time.sleep(0.75)
+        
+        else:
+            print("\n[INFO] : Please enter a valid option!\n")
+            time.sleep(0.75)
 
 
-def print_response_key_stats():
-    print("Working on it")
+def end_req_firing():
+    if not HALT_EVENT.is_set():
+        print("\n[INFO] : Completed REQs firing")
+        time.sleep(0.5)
+        print("[INFO] : Press <ENTER> Key to display Response Stats")
+        while not HALT_EVENT.is_set():
+            time.sleep(0.5)
+    else:
+        print("\n[INFO] : Ended REQs firing")
+        time.sleep(0.5)
+    
+    print("[INFO] : Displaying Response Stats")
+    time.sleep(0.5)
+    display_response_stats("ERF")
+    
 
 def halt_req_firing():
-    print("From halt_req_firing: Currently Halted")
-    time.sleep(5)
+    print("[INFO] : Halted REQs Firing!\n")
+    time.sleep(0.5)
+    while True:
+        print("----- HALT MENU -------------------")
+        print("[c] to Continue REQs Firing  | [d] to Display stats")
+        print("[e] to End REQs Firing       | [x] to Exit the tool")
+        key = input("\nSelect an option : ")
+        #print("User entered the key: ", key)
+        if key == 'c':
+            print("\n[INFO] : Continuing REQs Firing.\n")
+            time.sleep(0.5)
+            break
+        elif key == 'd':
+            display_response_stats("HRF")
+        elif key == 'e':
+            end_req_firing()
+        elif key == 'x':
+            confirmation = input("Are you sure you want to exit [y/n] : ")
+            if confirmation == 'y':
+                print("\n[INFO] : Exiting REQchine-gun.py. Bye!")
+                time.sleep(0.5)
+                exit(0)
+            else:
+                print("\n[INFO] : Exit cancelled.\n")
+                time.sleep(0.75)
+        else:
+            print("\n[INFO] : Please enter a valid option!\n")
+            time.sleep(0.75)
+
 
 def look_for_firing_halt_signal():
-    while not HALT_EVENT.is_set():
-        sys.stdin.read(1)
-        #print("From Thread: Halting Fire!!!!")
-        HALT_EVENT.set()
+    # while not HALT_EVENT.is_set():
+    sys.stdin.read(1)
+    #print("From Thread: Halting Fire!!!!")
+    HALT_EVENT.set()
 
 
 def set_firing_halt_monitoring_thread():
@@ -189,6 +343,7 @@ def set_firing_halt_monitoring_thread():
     halt_monitor_thread.start()
 
 def build_and_send_packet(req_line, headers, req_body):
+    time.sleep(0.5)
     if HALT_EVENT.is_set():
         #print("Inside build_and_send HALT_EVENT if block")
         halt_req_firing()
@@ -198,21 +353,38 @@ def build_and_send_packet(req_line, headers, req_body):
     URL = "http://" + headers["Host"] + req_line["target"]
     host_header_val = headers["Host"]
     del headers["Host"]
-    time.sleep(0.5)
-    if req_line["method"] == "GET":
-        response = requests.get(URL, headers=headers)
-        headers["Host"] = host_header_val
-        return response
-        #print("Response Status Code : ", response.status_code)
+    try:
+        if req_line["method"] == "GET":
+            response = requests.get(URL, headers=headers)
+            headers["Host"] = host_header_val
+            return response
+            #print("Response Status Code : ", response.status_code)
+        
+        elif req_line["method"] == "POST":
+            response = requests.post(URL, headers=headers, data=req_body)
+            headers["Host"] = host_header_val
+            return response
+            #print("Response Status Code : ", response.status_code)
+        else:
+            print("\n[ERROR] The tool only supports GET/POST requests, as of now.")
+            time.sleep(0.75)
+            print("\n[INFO] : Exiting REQchine-gun.py...")
+            print("[INFO] : Press <ENTER> Key to exit")
+            exit(1)
     
-    elif req_line["method"] == "POST":
-        response = requests.post(URL, headers=headers, data=req_body)
-        headers["Host"] = host_header_val
-        return response
-        #print("Response Status Code : ", response.status_code)
-    else:
-        print("The tool only supports GET/POST requests, as of now.")
-        exit(0)
+    except requests.exceptions.ConnectionError as e:
+        print("\n[ERROR] : Connection Error\n")
+        print(e)
+        time.sleep(0.75)
+        print("\n[INFO] : Exiting REQchine-gun.py...")
+        print("[INFO] : Press <ENTER> Key to exit")
+        exit(1)
+    except requests.exceptions.RequestException as e:
+        print(e)
+        time.sleep(0.75)
+        print("\n[INFO] : Exiting REQchine-gun.py...")
+        print("[INFO] : Press <ENTER> Key to exit")
+        exit(1)
 
 
 def handle_single_replacement_in_req_line(req_line_obj, headers, req_body, wl_file):
@@ -227,18 +399,19 @@ def handle_single_replacement_in_req_line(req_line_obj, headers, req_body, wl_fi
                 req_line_obj["target"] = req_line_obj["target"].replace(PLACEHOLDER_TEXT, replacement, 1)
                 #print(req_line_obj)
                 
-                collect_response_and_print(build_and_send_packet(req_line_obj, headers, req_body), [replacement])
+                collect_response_and_print(build_and_send_packet(req_line_obj, headers, req_body), (replacement,))
                 
                 req_line_obj["target"] = original_target
             
+            end_req_firing()
             # print(RESPONSE_LIST)
             # print(len(RESPONSE_LIST))
 
     except FileNotFoundError:
-        print(f"Error: The file '{wl_file}' was not found.")
+        print(f"[ERROR] : The file '{wl_file}' was not found.")
         exit(1)
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"[ERROR] : {e}")
         exit(1)
 
 
@@ -252,17 +425,18 @@ def handle_single_replacement_in_header(req_line_obj, header_obj, req_body, head
                 replacement = word.strip()
                 header_obj[header] = header_obj[header].replace(PLACEHOLDER_TEXT, replacement, 1)
                 #print(f"{header} : {header_obj[header]}")
-                collect_response_and_print(build_and_send_packet(req_line_obj, header_obj, req_body), [replacement])
+                collect_response_and_print(build_and_send_packet(req_line_obj, header_obj, req_body), (replacement,))
                 header_obj[header] = value
             
+            end_req_firing()
             # print(RESPONSE_LIST)
             # print(len(RESPONSE_LIST))
 
     except FileNotFoundError:
-        print(f"Error: The file '{wl_file}' was not found.")
+        print(f"[ERROR] : The file '{wl_file}' was not found.")
         exit(1)
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"[ERROR] : {e}")
         exit(1)
 
 
@@ -281,16 +455,17 @@ def handle_single_replacement_in_req_body(req_line_obj, header_obj, req_body, wl
                 #     print(modified_req_body)
                 # print(f"Req body's length AFTER update : {len(modified_req_body)}")
                 # print(f"Content-Length : {header_obj["Content-Length"]}")
-                collect_response_and_print(build_and_send_packet(req_line_obj, header_obj, modified_req_body), [replacement.decode('utf-8')])
+                collect_response_and_print(build_and_send_packet(req_line_obj, header_obj, modified_req_body), (replacement.decode('utf-8'),))
             
+            end_req_firing()
             # print(RESPONSE_LIST)
             # print(len(RESPONSE_LIST))
 
     except FileNotFoundError:
-        print(f"Error: The file '{wl_file}' was not found.")
+        print(f"[ERROR] : The file '{wl_file}' was not found.")
         exit(1)
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"[ERROR] : {e}")
         exit(1)
 
 
@@ -320,14 +495,14 @@ def make_replacements_and_fire_the_gun(req_filepath, r_count, r_filepaths, req_l
         # Check for the PLACEHOLDER_TEXT in req_body
 
         if req_line_obj["method"] != "POST":
-            print(f"Error: No replacement target (^REQchine^) was found in the provided request file '{req_filepath}'. Check your file!")
+            print(f"[ERROR] : No replacement target (^REQchine^) was found in the provided request file '{req_filepath}'. Check your file!")
             exit(1)
         else:
             if PLACEHOLDER_TEXT_BINARY in req_body:
                 handle_single_replacement_in_req_body(req_line_obj, header_obj, req_body, r_filepaths[0])
 
             else:
-                print(f"Error: No replacement target (^REQchine^) was found in the provided request file '{req_filepath}'. Check your file!")
+                print(f"[ERROR] : No replacement target (^REQchine^) was found in the provided request file '{req_filepath}'. Check your file!")
                 exit(1)
 
 
