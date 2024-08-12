@@ -1,11 +1,11 @@
 # A-CTFplayer-s-Humble-Toolkit
 
-<br />
-<br />
+A growing collection of security tools. The tools are being developed to be of help in common **Capture The Flag** (CTF) scenarios.
 
-**---------- Work in progress ----------**
+## List of tools in the toolkit
 
-<br />
+- **REQchine-gun.py** *(Version 0.5 Beta)*
+
 <br />
 
 ## Disclaimer
