@@ -22,6 +22,7 @@
 #Phase 3: Forwarder for the updated requests and Response Collector
 # -> Forward the packets to the target after the needed replacements have been performed.
 # -> Collect the responses received from the target.
+# Phase 3 - Completed
 
 
 import argparse
@@ -36,6 +37,7 @@ HALT_EVENT = threading.Event()
 PLACEHOLDER_TEXT = "^REQchine^"
 PLACEHOLDER_TEXT_BINARY = b"^REQchine^"
 RESPONSE_LIST = {}
+VERSION = "0.5 Beta"
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Rapidly fires customized HTTP requests at the pointed target!")
@@ -54,6 +56,28 @@ def check_arguments(args, parser):
     
     if args.wordlist and args.pathlist:
         parser.error("Both --wordlist and --pathlist have been provided. You must supply only one of the two arguments for the tool to work correctly.")
+
+
+def print_banner():
+    width = 100
+    print(f"\n{'+ - + - + - + - + - + - + - + - + - + - + - + - + - + - +'.center(width)}")
+    print("      _________________")
+    print("     /__   ________   /")
+    print("       /  /       /  /")
+    print("      /  /_______/  / //=====  //=======")
+    print("     /   __________/ //       //      //       //")
+    print("    /    \\          //       //      //       //")
+    print("   /  /\\  \\        //=====  //      //       //      o")
+    print("  /  /  \\  \\      //       // \\\\   // //=== //===\\\\ ///^===\\\\ //==\\\\   //==\\\\ //   ///^===\\\\    //==\\\\ //   //")
+    print(" /  /    \\  \\_   //       //   \\\\ ////     //   // // //   ////===//==//   ////   // //   //   //   ////   //")
+    print("/__/      \\___/ //====== //======// \\\\=== //   // // //   // \\\\====   \\\\==// \\\\==// //   // o //===// \\\\==//")
+    print("                                 \\\\                                      //                  //          //")
+    print("                                  \\\\                                \\\\==//                  //      \\\\==//")
+    version_str = f"Version {VERSION}"
+    centered_v_str = version_str.center(width)
+    print(f"\n\n{centered_v_str}\n")
+    print(f"{'+ - + - + - + - + - + - + - + - + - + - + - + - + - + - +'.center(width)}\n")
+
 
 
 def get_replacements_count_and_filepaths(args):
@@ -77,7 +101,6 @@ def get_replacements_count_and_filepaths(args):
             exit(1)
     
     return replacements_count, replacements_filepaths
-
 
 def print_verbose_output(args):
     #print(args.verbose)
@@ -159,10 +182,12 @@ def calculate_res_length(response):
 def collect_response_and_print(response, payloads):
     res_list_length = len(RESPONSE_LIST)
     if res_list_length == 0:
+        print("----------------------------------------------------------------------")
         print(f"REQ No.\t\tPayload(s)\t\tStatus\t\tRES Length")
+        print("----------------------------------------------------------------------")
     res_length = calculate_res_length(response)
     RESPONSE_LIST[res_list_length+1] = (response, payloads, res_length)
-    print(f"{res_list_length+1}\t\t{', '.join(payloads)}\t\t\t{response.status_code}\t\t{res_length}")
+    print(f" {res_list_length+1}\t\t{', '.join(payloads)}\t\t\t{response.status_code}\t\t{res_length}")
 
 def inspect_response(req_num):
     print(f"\n--- INSPECTION VIEW FOR REQ NO. {req_num} ---------------")
@@ -181,19 +206,11 @@ def inspect_response(req_num):
         print(res_tuple[0].text)
         time.sleep(0.7)
     print(f"\n---END OF INSPECTION VIEW FOR REQ NO. {req_num} ----------\n")
-    time.sleep(1)
+    time.sleep(0.5)
     
 def display_response_stats(called_from):
     print("\n----- RESPONSE STATS -------------------")
     time.sleep(0.5)
-    # Number of req fired
-    # Number of res grouped according to status code
-    # Number of res grouped according to res length
-    # Option to inspect a single res based on req no.
-    # Option to inspect a list of res based on a specific status code
-    # Option to inspect a list of res based on a specific res length
-    # Option to get back to Halt menu, if it was called by the Halt menu in the first place. Otherwise an option to exit the tool.
-
     print(f"REQs Fired\t\t\t   : {len(RESPONSE_LIST)}") 
     status_code_counts = {}
     length_counts = {}
@@ -234,9 +251,15 @@ def display_response_stats(called_from):
         elif selected_option == "2":
             s_code = int(input("Enter the status code to be used as filter : "))
             if s_code in status_code_counts:
+                s_code_count = status_code_counts[s_code]
+                i = 0
                 for r_id, r_tuple in RESPONSE_LIST.items():
                     if r_tuple[0].status_code == s_code:
                         inspect_response(r_id)
+                        i += 1
+                        print(f"[INFO] : {i}/{s_code_count} REQ(s) with Status Code {s_code} inspected.")
+                        time.sleep(0.6)
+
                 print("\n[INFO] : Back to Response Stats Menu\n")
             else:
                 print(f"\n[ERROR] None of the responses have a status code of {s_code}\n")
@@ -245,9 +268,15 @@ def display_response_stats(called_from):
         elif selected_option == "3":
             res_len = int(input("Enter the RES Length to be used as filter : "))
             if res_len in length_counts:
+                res_len_count = length_counts[res_len]
+                j = 0
                 for r_id, r_tuple in RESPONSE_LIST.items():
                     if r_tuple[2] == res_len:
                         inspect_response(r_id)
+                        j += 1
+                        print(f"[INFO] : {j}/{res_len_count} REQ(s) with Length {res_len} inspected.")
+                        time.sleep(0.6)
+
                 print("\n[INFO] : Back to Response Stats Menu\n")
             else:
                 print(f"\n[ERROR] None of the responses have a RES Length of {res_len}\n")
@@ -257,7 +286,7 @@ def display_response_stats(called_from):
             if called_from == "ERF":
                 confirmation = input("Are you sure you want to exit [y/n] : ")
                 if confirmation == 'y':
-                    print("\n[INFO] : Exiting REQchine-gun.py. Bye!")
+                    print("\n[INFO] : Exiting REQchine-gun.py. Bye!\n")
                     time.sleep(0.5)
                     exit(0)
                 else:
@@ -289,7 +318,7 @@ def end_req_firing():
         time.sleep(0.5)
         print("[INFO] : Press <ENTER> Key to display Response Stats")
         while not HALT_EVENT.is_set():
-            time.sleep(0.5)
+            time.sleep(0.3)
     else:
         print("\n[INFO] : Ended REQs firing")
         time.sleep(0.5)
@@ -309,7 +338,7 @@ def halt_req_firing():
         key = input("\nSelect an option : ")
         #print("User entered the key: ", key)
         if key == 'c':
-            print("\n[INFO] : Continuing REQs Firing.\n")
+            print("\n[INFO] : Continuing REQs Firing.")
             time.sleep(0.5)
             break
         elif key == 'd':
@@ -331,25 +360,27 @@ def halt_req_firing():
 
 
 def look_for_firing_halt_signal():
-    # while not HALT_EVENT.is_set():
     sys.stdin.read(1)
-    #print("From Thread: Halting Fire!!!!")
     HALT_EVENT.set()
 
 
 def set_firing_halt_monitoring_thread():
     halt_monitor_thread = threading.Thread(target=look_for_firing_halt_signal)
     halt_monitor_thread.daemon = True
+    print("[INFO] : To halt REQs firing at any point in time, press the <ENTER> key.\n")
+    time.sleep(0.25)
+    if len(RESPONSE_LIST) > 0:
+        print("----------------------------------------------------------------------")
+        print(f"REQ No.\t\tPayload(s)\t\tStatus\t\tRES Length")
+        print("----------------------------------------------------------------------")
     halt_monitor_thread.start()
 
 def build_and_send_packet(req_line, headers, req_body):
     time.sleep(0.5)
     if HALT_EVENT.is_set():
-        #print("Inside build_and_send HALT_EVENT if block")
         halt_req_firing()
         HALT_EVENT.clear()
         set_firing_halt_monitoring_thread()
-        print("Resuming build_and_send")
     URL = "http://" + headers["Host"] + req_line["target"]
     host_header_val = headers["Host"]
     del headers["Host"]
@@ -418,19 +449,14 @@ def handle_single_replacement_in_req_line(req_line_obj, headers, req_body, wl_fi
 def handle_single_replacement_in_header(req_line_obj, header_obj, req_body, header, value, wl_file):
     try:
         with open(wl_file) as wordlist_file:
-            # print(f"{header} : {value}")
-            # print("------------")
             set_firing_halt_monitoring_thread()
             for word in wordlist_file:
                 replacement = word.strip()
                 header_obj[header] = header_obj[header].replace(PLACEHOLDER_TEXT, replacement, 1)
-                #print(f"{header} : {header_obj[header]}")
                 collect_response_and_print(build_and_send_packet(req_line_obj, header_obj, req_body), (replacement,))
                 header_obj[header] = value
             
             end_req_firing()
-            # print(RESPONSE_LIST)
-            # print(len(RESPONSE_LIST))
 
     except FileNotFoundError:
         print(f"[ERROR] : The file '{wl_file}' was not found.")
@@ -443,24 +469,17 @@ def handle_single_replacement_in_header(req_line_obj, header_obj, req_body, head
 def handle_single_replacement_in_req_body(req_line_obj, header_obj, req_body, wl_file):
     try:
         with open(wl_file) as wordlist_file:
-            #print(f"Req body's length BEFORE update : {len(req_body)}")
-            #print(f"Content-Length : {header_obj["Content-Length"]}")                    
-            #print("------------")
+            
             set_firing_halt_monitoring_thread()
             for word in wordlist_file:
                 replacement = word.strip().encode()
                 modified_req_body = req_body.replace(PLACEHOLDER_TEXT_BINARY, replacement, 1)
                 header_obj["Content-Length"] = str(len(modified_req_body))
-                # if len(modified_req_body) < 150:
-                #     print(modified_req_body)
-                # print(f"Req body's length AFTER update : {len(modified_req_body)}")
-                # print(f"Content-Length : {header_obj["Content-Length"]}")
+                
                 collect_response_and_print(build_and_send_packet(req_line_obj, header_obj, modified_req_body), (replacement.decode('utf-8'),))
             
             end_req_firing()
-            # print(RESPONSE_LIST)
-            # print(len(RESPONSE_LIST))
-
+            
     except FileNotFoundError:
         print(f"[ERROR] : The file '{wl_file}' was not found.")
         exit(1)
@@ -470,6 +489,10 @@ def handle_single_replacement_in_req_body(req_line_obj, header_obj, req_body, wl
 
 
 def make_replacements_and_fire_the_gun(req_filepath, r_count, r_filepaths, req_line_obj, header_obj, req_body):
+    
+    print("[INFO] : Initiated REQs Firing!")
+    time.sleep(0.5)
+    
     if r_count == 1:
         #---------------------------
         # Find the replacement target in the packet
@@ -505,17 +528,20 @@ def make_replacements_and_fire_the_gun(req_filepath, r_count, r_filepaths, req_l
                 print(f"[ERROR] : No replacement target (^REQchine^) was found in the provided request file '{req_filepath}'. Check your file!")
                 exit(1)
 
+    else:
+        print("Future work.")
 
 def main():
     
-    # Argument parsing and dealing with verbose O/p
+    # Argument parsing, Banner printing and dealing with verbose O/p
 
     parser = parse_arguments()
     args = parser.parse_args()
     check_arguments(args, parser)
+    print_banner()
     replacements_count, replacements_filepaths = get_replacements_count_and_filepaths(args)
-    print(replacements_count)
-    print(replacements_filepaths)
+    #print(replacements_count)
+    #print(replacements_filepaths)
     print_verbose_output(args)
     
 
@@ -523,12 +549,11 @@ def main():
 
     packet_req_line, packet_headers, packet_body = extract_packet_sections(args.request)
     #print_packet_sections(packet_req_line, packet_headers, packet_body)
-    #print(packet_body)
 
     # Parsing of the packet's sections
     
     req_line_obj = parse_request_line(packet_req_line)
-    print(req_line_obj)
+    #print(req_line_obj)
     header_obj = parse_headers(packet_headers)
     #print(header_obj)
     
@@ -537,14 +562,8 @@ def main():
     #     print(f"{i}. {k}::: {v}")
     #     i += 1
     
-    #print(len(packet_body))
-    #print(packet_body)
-    #print(len(packet_body))
-    
     req_body = packet_body if packet_body else None
     
-    #print(req_body)
-    #print(len(req_body))
     #print_packet_sections(req_line_obj, header_obj, req_body)
     
 
@@ -552,11 +571,6 @@ def main():
 
     make_replacements_and_fire_the_gun(args.request, replacements_count, replacements_filepaths, req_line_obj, header_obj, req_body)
     
-    #exit(0)
-    # Building and Sending the packet
-    
-    #build_and_send_packet(req_line_obj, header_obj, req_body)
-
 
 if __name__ == "__main__":
     main()
