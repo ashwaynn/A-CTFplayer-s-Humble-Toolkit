@@ -15,7 +15,7 @@
                                   \\                                \\==//                  //      \\==//
 
 
-                                          Version 0.5 Beta                                          
+                                            Version 1.0                                             
 
 ```
 
@@ -40,6 +40,8 @@
 Common targets for such replacements include values of form fields, HTTP headers and the target path specified in the request line of the request. The tool is especially useful in SSRF scenarios where you would typically have to do a very quick scan of the entire port range to determine the port on which the local HTTP server is listening on.
 
 ```bash
+# Note : Use python3.12
+
 python3 REQchine-gun.py --help
 usage: REQchine-gun.py [-h] -r REQUEST [-w WORDLIST] [-p PATHLIST] [-v]
 
@@ -52,8 +54,8 @@ options:
   -w WORDLIST, --wordlist WORDLIST
                         A Wordlist containing the words to be used as replacements in the HTTP requests
   -p PATHLIST, --pathlist PATHLIST
-                        A Pathlist containing the paths of various wordlists to be used. The first wordlist would be used for the
-                        first target, the second wordlist for the second target and so on.
+                        Future Work: A Pathlist containing the paths of various wordlists to be used. The first wordlist would be used
+                        for the first target, the second wordlist for the second target and so on.
   -v, --verbose         For Verbose Output
 ```
 
