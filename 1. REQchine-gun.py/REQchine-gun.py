@@ -1,32 +1,6 @@
-# --------------------
-# Work in progress
-# --------------------
-
-# Phase 1 : Packet Constructor and Forwarder
-# -> Extract packet's contents from FILE
-# -> Construct NEW packet
-# -> Send the packet
-# Phase 1 - Completed
-
-# Phase 2 : Replacement target(s) Detector and Replacer
-# -> Accept a single wordlist or a pathlist
-# -> A pathlist is a basically a file containing the paths of multiple wordlists.
-# -> Determine the number of replacement targets based on the provided wordlist or pathlist.
-# -> If a wordlist has been provided then only one target would be present.
-# -> If a pathlist has been provided then multiple targets would be present (Must have a target counter in the code). 
-# -> Detect the replacement targets after the parsing stage.
-# -> In case of a POST request, update the Content-Length header after the replacement(s)
-# Format for paceholder: ^REQchine^
-# Phase 2 (Single replacement target) - Completed
-
-#Phase 3: Forwarder for the updated requests and Response Collector
-# -> Forward the packets to the target after the needed replacements have been performed.
-# -> Collect the responses received from the target.
-# Phase 3 - Completed
-
+# Note : Use python3.12
 
 import argparse
-import copy
 import requests
 import sys
 import threading
@@ -37,13 +11,13 @@ HALT_EVENT = threading.Event()
 PLACEHOLDER_TEXT = "^REQchine^"
 PLACEHOLDER_TEXT_BINARY = b"^REQchine^"
 RESPONSE_LIST = {}
-VERSION = "0.5 Beta"
+VERSION = "1.0"
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Rapidly fires customized HTTP requests at the pointed target!")
     parser.add_argument('-r', '--request', type=str, required=True, help='File containing the HTTP request packet')
     parser.add_argument('-w', '--wordlist', type=str, help='A Wordlist containing the words to be used as replacements in the HTTP requests')
-    parser.add_argument('-p', '--pathlist', type=str, help='A Pathlist containing the paths of various wordlists to be used. The first wordlist would be used for the first target, the second wordlist for the second target and so on.')
+    parser.add_argument('-p', '--pathlist', type=str, help='Future Work: A Pathlist containing the paths of various wordlists to be used. The first wordlist would be used for the first target, the second wordlist for the second target and so on.')
     parser.add_argument('-v', '--verbose', action='store_true', help='For Verbose Output')
     
 
@@ -329,14 +303,13 @@ def end_req_firing():
     
 
 def halt_req_firing():
-    print("[INFO] : Halted REQs Firing!\n")
+    print("\n[INFO] : Halted REQs Firing!\n")
     time.sleep(0.5)
     while True:
         print("----- HALT MENU -------------------")
         print("[c] to Continue REQs Firing  | [d] to Display stats")
         print("[e] to End REQs Firing       | [x] to Exit the tool")
         key = input("\nSelect an option : ")
-        #print("User entered the key: ", key)
         if key == 'c':
             print("\n[INFO] : Continuing REQs Firing.")
             time.sleep(0.5)
@@ -376,7 +349,6 @@ def set_firing_halt_monitoring_thread():
     halt_monitor_thread.start()
 
 def build_and_send_packet(req_line, headers, req_body):
-    time.sleep(0.5)
     if HALT_EVENT.is_set():
         halt_req_firing()
         HALT_EVENT.clear()
@@ -389,13 +361,13 @@ def build_and_send_packet(req_line, headers, req_body):
             response = requests.get(URL, headers=headers)
             headers["Host"] = host_header_val
             return response
-            #print("Response Status Code : ", response.status_code)
+            
         
         elif req_line["method"] == "POST":
             response = requests.post(URL, headers=headers, data=req_body)
             headers["Host"] = host_header_val
             return response
-            #print("Response Status Code : ", response.status_code)
+            
         else:
             print("\n[ERROR] The tool only supports GET/POST requests, as of now.")
             time.sleep(0.75)
@@ -421,22 +393,19 @@ def build_and_send_packet(req_line, headers, req_body):
 def handle_single_replacement_in_req_line(req_line_obj, headers, req_body, wl_file):
     try:
         with open(wl_file) as wordlist_file:
-            #print(req_line_obj)
+            
             original_target = req_line_obj["target"]
-            #print("------------")
             set_firing_halt_monitoring_thread()
             for word in wordlist_file:
                 replacement = word.strip()
                 req_line_obj["target"] = req_line_obj["target"].replace(PLACEHOLDER_TEXT, replacement, 1)
-                #print(req_line_obj)
                 
                 collect_response_and_print(build_and_send_packet(req_line_obj, headers, req_body), (replacement,))
                 
                 req_line_obj["target"] = original_target
             
             end_req_firing()
-            # print(RESPONSE_LIST)
-            # print(len(RESPONSE_LIST))
+            
 
     except FileNotFoundError:
         print(f"[ERROR] : The file '{wl_file}' was not found.")
@@ -494,13 +463,7 @@ def make_replacements_and_fire_the_gun(req_filepath, r_count, r_filepaths, req_l
     time.sleep(0.5)
     
     if r_count == 1:
-        #---------------------------
-        # Find the replacement target in the packet
-        # Open the wordlist and call build_and_send_packet() for every word in the wordlist and obtain the response object.
-        # Populate the keys stats of the returned response object
-        # Have a mechanism to pause or end the requests firing
-        #---------------------------
-
+        
         # Check for the PLACEHOLDER_TEXT in req_line_obj
 
         if PLACEHOLDER_TEXT in req_line_obj["target"]:
@@ -548,24 +511,12 @@ def main():
     # Extraction of the packet's sections
 
     packet_req_line, packet_headers, packet_body = extract_packet_sections(args.request)
-    #print_packet_sections(packet_req_line, packet_headers, packet_body)
 
     # Parsing of the packet's sections
     
     req_line_obj = parse_request_line(packet_req_line)
-    #print(req_line_obj)
     header_obj = parse_headers(packet_headers)
-    #print(header_obj)
-    
-    # i = 1
-    # for k, v in header_obj.items():
-    #     print(f"{i}. {k}::: {v}")
-    #     i += 1
-    
     req_body = packet_body if packet_body else None
-    
-    #print_packet_sections(req_line_obj, header_obj, req_body)
-    
 
     # The core functionality
 
