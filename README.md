@@ -5,6 +5,7 @@ A growing collection of security tools. The tools are being developed to be of h
 ## List of tools in the toolkit
 
 - **REQchine-gun.py** *(Version 1.0)*
+- **LINenum-o-scope** *(Work in progress)*
 
 <br />
 
